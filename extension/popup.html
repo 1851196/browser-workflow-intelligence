@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>BWI Workspace</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { width: 360px; margin: 0; padding: 18px; font-family: Arial, "Microsoft YaHei", sans-serif; color: #172033; background: #f6f8fc; }
+    h2 { margin: 0 0 8px; }
+    h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+    p { line-height: 1.5; }
+    label { display: block; margin-bottom: 6px; font-weight: bold; }
+    input { width: 100%; padding: 10px; border: 1px solid #aeb9cc; border-radius: 6px; font: inherit; }
+    button { padding: 9px 12px; border: 1px solid #aeb9cc; border-radius: 6px; background: white; color: #172033; cursor: pointer; font: inherit; }
+    button:disabled { opacity: .5; cursor: wait; }
+    :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+    #save { width: 100%; margin-top: 10px; color: white; background: #2563eb; border-color: #2563eb; }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 10px; }
+    .toolbar h3 { font-size: 16px; }
+    #retry { padding: 5px 9px; }
+    .workspace { padding: 14px; margin-bottom: 10px; background: white; border: 1px solid #dce2ed; border-radius: 8px; }
+    .workspace p { margin: 6px 0 10px; color: #526079; }
+    .actions { display: flex; gap: 8px; margin-bottom: 10px; }
+    .delete { color: #b42318; }
+    #preview { max-height: 330px; overflow-y: auto; overflow-wrap: anywhere; }
+    summary { cursor: pointer; color: #526079; }
+    ol { padding-left: 22px; }
+    li { margin-bottom: 6px; }
+    #status { color: #174ea6; overflow-wrap: anywhere; }
+    .hint { font-size: 12px; color: #526079; }
+  </style>
+</head>
+<body>
+  <h2>BWI Workspace <small>V0.2</small></h2>
+  <p>为不同任务保存独立的浏览器工作区。</p>
+  <label for="workspaceName">工作区名称</label>
+  <input id="workspaceName" type="text" placeholder="例如：实习求职" maxlength="40" autocomplete="off" aria-describedby="saveHint">
+  <button id="save" type="button">保存当前窗口</button>
+  <p id="saveHint" class="hint">仅主动保存时读取当前窗口的 HTTP(S) 网页标题和地址，保存在本机；每个工作区最多30个标签页，不保存无痕窗口。同名不会覆盖。</p>
+  <div class="toolbar">
+    <h3>已保存的工作区</h3>
+    <button id="retry" type="button">刷新列表</button>
+  </div>
+  <div id="preview" aria-busy="false"></div>
+  <p id="status" role="status" aria-live="polite"></p>
+  <p class="hint">恢复会打开新窗口，保留原窗口。删除仅移除所选工作区的本地记录。</p>
+  <script src="popup.js"></script>
+</body>
+</html>
