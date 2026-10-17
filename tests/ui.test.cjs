@@ -102,12 +102,13 @@ const server = http.createServer((req, res) => {
     });
     await check('界面截图与重新打开后持久化', async () => {
       await reload(); assert.equal(await page.locator('.workspace').count(), 2);
-      await page.screenshot({path: path.join(output, 'BWI-V0.2-preview.png')});
+      await page.screenshot({path: path.join(output, 'BWI-V0.2.1-preview.png')});
       assert.ok(await page.locator('#save').isVisible());
     });
     await check('删除单项后另一项完整保留', async () => {
       const other = clone(storage.workspaces[1]);
       await page.getByRole('button', {name: '删除工作区：实习求职', exact: true}).click(); await ready();
+      await page.getByRole('button', {name: '确认删除工作区：实习求职', exact: true}).click(); await ready();
       assert.deepEqual(storage.workspaces, [other]);
       await reload(); assert.equal(await page.locator('.workspace').count(), 1);
     });
@@ -121,6 +122,7 @@ const server = http.createServer((req, res) => {
     await check('删除迁移后的全部记录不会复活旧数据', async () => {
       for (const item of [...storage.workspaces]) {
         await page.getByRole('button', {name:`删除工作区：${item.name}`, exact:true}).click(); await ready();
+        await page.getByRole('button', {name:`确认删除工作区：${item.name}`, exact:true}).click(); await ready();
       }
       await reload(); assert.equal(storage.workspaces.length, 0);
     });
@@ -149,6 +151,7 @@ const server = http.createServer((req, res) => {
       const before = clone(storage); failSet = true; tabs = [tab('https://new.example')];
       await save('新工作区'); await message(/保存失败/); assert.deepEqual(storage, before);
       await page.getByRole('button', {name:'删除工作区：旧工作区', exact:true}).click(); await ready();
+      await page.getByRole('button', {name:'确认删除工作区：旧工作区', exact:true}).click(); await ready();
       await message(/删除失败/); assert.deepEqual(storage, before); failSet = false;
     });
     await check('恢复跳过无效地址且保留有效地址顺序', async () => {
@@ -206,15 +209,88 @@ const server = http.createServer((req, res) => {
       storage = {workspaces:[ws('a','A',['https://a.example']),ws('b','B',['https://b.example'])]}; await reload();
       storage.workspaces = storage.workspaces.filter(w => w.id !== 'a');
       await page.getByRole('button', {name:'删除工作区：A', exact:true}).click(); await ready();
+      await page.getByRole('button', {name:'确认删除工作区：A', exact:true}).click(); await ready();
       await message(/已被删除/); assert.equal(storage.workspaces[0].name,'B');
+    });
+    async function rename(name, replacement) {
+      await page.getByRole('button', {name:`重命名工作区：${name}`, exact:true}).click();
+      await page.getByRole('textbox', {name:`新名称：${name}`, exact:true}).fill(replacement);
+      await page.getByRole('button', {name:'保存名称', exact:true}).click(); await ready();
+    }
+    await check('重命名只修改名称，保留ID、时间、网页及另一工作区', async () => {
+      storage = {workspaces:[{...ws('a','求职',['https://a.example']), savedAt:'2026-10-17T01:00:00.000Z'}, ws('b','学习',['https://b.example'])]};
+      await reload(); const before = clone(storage);
+      await rename('求职', '  实习求职  ');
+      assert.deepEqual(storage.workspaces[0], {...before.workspaces[0],name:'实习求职'});
+      assert.deepEqual(storage.workspaces[1], before.workspaces[1]);
+      await reload(); assert.equal(await page.locator('.workspace h3').first().innerText(),'实习求职');
+      await page.getByRole('button',{name:'恢复工作区：实习求职',exact:true}).click(); await ready();
+      assert.deepEqual(windows.at(-1).url,['https://a.example']);
+    });
+    await check('重命名拒绝空白和同名，允许保留自身原名', async () => {
+      const before = clone(storage), writes = writeCount;
+      for (const [replacement, pattern] of [['   ',/请输入/],['学习',/同名/],['实习求职',/未改变/]]) {
+        await rename('实习求职',replacement); await message(pattern); assert.deepEqual(storage,before);
+      }
+      assert.equal(writeCount,writes);
+    });
+    await check('取消重命名不写入，写入失败可以重试', async () => {
+      const before = clone(storage);
+      await page.getByRole('button',{name:'重命名工作区：实习求职',exact:true}).click();
+      await page.getByRole('textbox',{name:'新名称：实习求职',exact:true}).fill('未保存');
+      await page.getByRole('button',{name:'取消重命名',exact:true}).click();
+      assert.deepEqual(storage,before);
+      failSet = true; await rename('实习求职','新名称'); await message(/重命名失败/); assert.deepEqual(storage,before);
+      failSet = false; await page.getByRole('button',{name:'保存名称',exact:true}).click(); await ready();
+      assert.equal(storage.workspaces[0].name,'新名称');
+    });
+    await check('重命名读取失败不覆盖数据', async () => {
+      const before = clone(storage); failGet = true;
+      await rename('新名称','读取错误'); await message(/重命名失败/); assert.deepEqual(storage,before);
+      failGet = false; await reload();
+    });
+    await check('保存时间正常显示，旧数据缺失或无效时显示未知', async () => {
+      assert.match(await page.locator('.saved-time').first().innerText(),/2026/);
+      assert.match(await page.locator('.saved-time').nth(1).innerText(),/时间未知/);
+      storage.workspaces[1].savedAt = 'broken'; await reload();
+      assert.match(await page.locator('.saved-time').nth(1).innerText(),/时间未知/);
+    });
+    await check('删除第一次点击及取消均不写入，只有确认才删除', async () => {
+      const before = clone(storage), writes = writeCount;
+      await page.getByRole('button',{name:'删除工作区：新名称',exact:true}).click();
+      assert.equal(await page.getByRole('button',{name:'取消删除',exact:true}).evaluate(el=>el===document.activeElement),true);
+      assert.deepEqual(storage,before); assert.equal(writeCount,writes);
+      await page.getByRole('button',{name:'取消删除',exact:true}).click(); assert.deepEqual(storage,before);
+      await page.getByRole('button',{name:'删除工作区：新名称',exact:true}).click();
+      await page.getByRole('button',{name:'确认删除工作区：新名称',exact:true}).click(); await ready();
+      assert.deepEqual(storage.workspaces,[before.workspaces[1]]);
+    });
+    await check('确认期间其他页面重命名时阻止旧名称删除', async () => {
+      await page.getByRole('button',{name:'删除工作区：学习',exact:true}).click();
+      storage.workspaces[0].name = '已改名';
+      await page.getByRole('button',{name:'确认删除工作区：学习',exact:true}).click(); await ready();
+      await message(/重新确认/); assert.equal(storage.workspaces[0].name,'已改名');
+    });
+    await check('两个页面并发重命名为同一名称时仅成功一项', async () => {
+      storage = {workspaces:[ws('a','A',[]),ws('b','B',[])]}; await reload();
+      const second = await context.newPage(); await second.goto(url); await ready(second);
+      await Promise.all([page.evaluate(()=>renameWorkspace('a','目标')),second.evaluate(()=>renameWorkspace('b','目标'))]);
+      assert.equal(storage.workspaces.filter(w=>w.name==='目标').length,1); await second.close();
+    });
+    await check('名称过长或工作区已删除时拒绝重命名', async () => {
+      const before = clone(storage);
+      await page.evaluate(()=>renameWorkspace('a','x'.repeat(41))); await ready(); await message(/最多40/);
+      assert.deepEqual(storage,before);
+      await page.evaluate(()=>renameWorkspace('missing','不存在')); await ready(); await message(/已被删除/);
+      assert.deepEqual(storage,before);
     });
     assert.deepEqual(errors, []);
     const manifest = JSON.parse(fs.readFileSync(path.join(project,'manifest.json'),'utf8'));
-    assert.equal(manifest.version,'0.2.0');
+    assert.equal(manifest.version,'0.2.1');
     assert.deepEqual(manifest.permissions,['tabs','storage']);
     assert.ok(!manifest.content_scripts && !manifest.background && !manifest.host_permissions);
     results.push('清单版本和权限校验；无未捕获脚本错误');
-    fs.writeFileSync(path.join(output, 'BWI-V0.2-test-results.json'), JSON.stringify({passed:results.length, tests:results, environment:'Installed Chrome headless; real DOM and Web Locks; mocked chrome.storage/tabs/windows APIs. Existing user Chrome profile and extension storage were not accessed.'},null,2));
+    fs.writeFileSync(path.join(output, 'BWI-V0.2.1-test-results.json'), JSON.stringify({passed:results.length, tests:results, environment:'Installed Chrome headless; real DOM and Web Locks; mocked chrome.storage/tabs/windows APIs. Existing user Chrome profile and extension storage were not accessed.'},null,2));
     console.log(`ALL ${results.length} CHECKS PASSED`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => server.close());

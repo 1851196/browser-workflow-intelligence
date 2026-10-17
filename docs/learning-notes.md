@@ -1,12 +1,12 @@
-# Browser Workflow Intelligence — V0.2
+# Browser Workflow Intelligence — V0.2.1
 
-本地浏览器工作区管理扩展。V0.2 在 V0.1 的基础上增加多个命名工作区。
+本地浏览器工作区管理扩展。V0.2 增加多个命名工作区；V0.2.1 增加重命名、删除确认和保存时间。
 
 ## 在现有 Chrome 中启用
 
 1. 打开 `chrome://extensions`。
 2. 找到已有的 **BWI Workspace Manager**，点击重新加载按钮。
-3. 确认版本为 **0.2.0**，再次打开扩展，标题显示 **V0.2**。
+3. 确认版本为 **0.2.1**，再次打开扩展，标题显示 **V0.2.1**。
 4. 继续使用原来加载的 `BWI/extension` 目录，无需移除扩展或重新安装。
 
 ## 功能与规则
@@ -27,7 +27,7 @@
 
 ## 代码导读
 
-`manifest.json`：版本改为 `0.2.0`；权限仍为 `tabs` 和 `storage`。
+`manifest.json`：版本改为 `0.2.1`；权限仍为 `tabs` 和 `storage`。
 
 `popup.html`：名称输入框、保存按钮、工作区卡片列表、状态提示，以及列表刷新按钮。
 
@@ -56,9 +56,11 @@
 1. `saveWorkspace()`：校验名称 → 读取列表 → 检查重名 → 读取当前窗口 → 过滤和排序 → `push()` 新对象 → 写回数组。
 2. `renderWorkspaces()`：遍历数组，为每项生成卡片；使用 `textContent` 展示名称和标题。
 3. `restoreWorkspace(id)`：用 `find()` 定位对象，将有效 URL 数组传给新窗口。
-4. `deleteWorkspace(id)`：用 `filter()` 生成不包含该对象的新数组，再写回。
-5. `readWorkspaces()`：读取、检查格式并迁移旧数据。
-6. `runAction()`：处理错误和操作期间的按钮状态；通过 Web Locks 将多个弹窗的读取、修改和写入依次执行，避免并发覆盖。
+4. `renameWorkspace(id, value)`：校验新名称，用 `map()` 生成数组，通过 `{ ...item, name }` 只替换名称；不重新查询网页、不改原保存时间。
+5. `deleteWorkspace(id, confirmedName)`：确认后重新读取记录，核对名称未变化，用 `filter()` 生成不包含该对象的新数组，再写回。
+6. `readWorkspaces()`：读取、检查格式并迁移旧数据。
+7. `runAction()`：处理错误和操作期间的按钮状态；通过 Web Locks 将多个弹窗的读取、修改和写入依次执行，避免并发覆盖。
+8. `formatSavedAt()`：按本地时间格式化原保存时间；无有效值时显示“时间未知”。
 
 接口参考：[Chrome Storage](https://developer.chrome.com/docs/extensions/reference/api/storage)、[Chrome Tabs](https://developer.chrome.com/docs/extensions/reference/api/tabs)、[Chrome Windows](https://developer.chrome.com/docs/extensions/reference/api/windows)、[Web Locks](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API)。
 
@@ -72,6 +74,8 @@
 6. 若此前有 V0.1 保存记录，首次打开 V0.2 时应在列表看到它，重新打开不应重复出现。
 
 ## 已完成验证
+
+V0.2.1：34项界面及异常场景检查、13项真实扩展集成检查通过。新增覆盖重命名的数据保留、重名和空白校验、取消及失败重试、并发重名、保存时间兼容、删除取消和确认期间名称变化。重新加载后可依次测试：重命名 → 重开弹窗核对 → 点击删除后取消 → 再次删除并确认。
 
 2026-10-17：25项界面与错误场景检查通过，其中 Chrome 存储、标签页及窗口接口采用模拟方式测试，DOM 和 Web Locks 使用真实浏览器。
 

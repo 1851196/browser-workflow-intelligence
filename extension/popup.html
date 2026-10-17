@@ -20,7 +20,13 @@
     #retry { padding: 5px 9px; }
     .workspace { padding: 14px; margin-bottom: 10px; background: white; border: 1px solid #dce2ed; border-radius: 8px; }
     .workspace p { margin: 6px 0 10px; color: #526079; }
-    .actions { display: flex; gap: 8px; margin-bottom: 10px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .actions button { padding: 8px; font-size: 13px; }
+    .saved-time { font-size: 12px; }
+    .edit-form, .confirmation { padding: 10px; margin-bottom: 10px; background: #f6f8fc; border-radius: 6px; }
+    .edit-form input { margin-bottom: 8px; }
+    .edit-form button, .confirmation button { padding: 7px; margin: 0 4px 4px 0; font-size: 13px; }
+    [hidden] { display: none; }
     .delete { color: #b42318; }
     #preview { max-height: 330px; overflow-y: auto; overflow-wrap: anywhere; }
     summary { cursor: pointer; color: #526079; }
@@ -31,7 +37,7 @@
   </style>
 </head>
 <body>
-  <h2>BWI Workspace <small>V0.2</small></h2>
+  <h2>BWI Workspace <small>V0.2.1</small></h2>
   <p>为不同任务保存独立的浏览器工作区。</p>
   <label for="workspaceName">工作区名称</label>
   <input id="workspaceName" type="text" placeholder="例如：实习求职" maxlength="40" autocomplete="off" aria-describedby="saveHint">
