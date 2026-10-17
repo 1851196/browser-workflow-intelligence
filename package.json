@@ -1,6 +1,6 @@
 {
   "name": "browser-workflow-intelligence",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Local-first Chrome extension for saving and restoring named browser workspaces.",
   "scripts": {

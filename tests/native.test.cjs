@@ -30,8 +30,8 @@ const server = http.createServer((req,res) => {
     const ready = () => popup.waitForFunction(()=>!document.getElementById('save').disabled);
     const data = () => popup.evaluate(()=>chrome.storage.local.get(null));
     await ready();
-    assert.equal(await popup.evaluate(()=>chrome.runtime.getManifest().version),'0.2.0');
-    const results = ['真实扩展成功加载，版本为0.2.0'];
+    assert.equal(await popup.evaluate(()=>chrome.runtime.getManifest().version),'0.2.1');
+    const results = ['真实扩展成功加载，版本为0.2.1'];
     await popup.locator('#save').click(); await ready();
     assert.match(await popup.locator('#status').innerText(),/请输入工作区名称/);
     results.push('真实扩展弹窗页面拦截空名称');
@@ -62,8 +62,26 @@ const server = http.createServer((req,res) => {
       results.push(`真实windows.create恢复「${name}」顺序正确，原窗口及标签页保留`);
     }
     await popup.bringToFront();
-    await popup.screenshot({path:path.join(output,'BWI-V0.2-preview.png')});
+    assert.match(await popup.locator('.saved-time').first().innerText(),/保存于：.*\d{4}/);
+    results.push('真实保存时间按本地时间显示');
+    await popup.getByRole('button',{name:'重命名工作区：课程学习',exact:true}).click();
+    await popup.getByRole('textbox',{name:'新名称：课程学习',exact:true}).fill('课程复习');
+    await popup.getByRole('button',{name:'保存名称',exact:true}).click(); await ready();
+    const renamed = (await data()).workspaces[1];
+    assert.deepEqual(renamed,{...saved.workspaces[1],name:'课程复习'});
+    saved.workspaces[1] = renamed;
+    await popup.reload(); await ready();
+    assert.equal(await popup.locator('.workspace h3').nth(1).innerText(),'课程复习');
+    await popup.getByRole('button',{name:'恢复工作区：课程复习',exact:true}).click(); await ready();
+    results.push('真实重命名保留ID、保存时间和网页，重新打开可恢复');
+    await popup.screenshot({path:path.join(output,'BWI-V0.2.1-preview.png')});
     await popup.getByRole('button',{name:'删除工作区：实习求职',exact:true}).click(); await ready();
+    assert.equal((await data()).workspaces.length,2);
+    await popup.getByRole('button',{name:'取消删除',exact:true}).click();
+    assert.equal((await data()).workspaces.length,2);
+    results.push('真实删除确认支持取消，记录保持不变');
+    await popup.getByRole('button',{name:'删除工作区：实习求职',exact:true}).click();
+    await popup.getByRole('button',{name:'确认删除工作区：实习求职',exact:true}).click(); await ready();
     assert.deepEqual((await data()).workspaces,[saved.workspaces[1]]);
     await popup.reload(); await ready(); assert.equal(await popup.locator('.workspace').count(),1);
     results.push('真实存储删除单项，重新打开后其他工作区仍保留');
@@ -77,10 +95,11 @@ const server = http.createServer((req,res) => {
     await popup.reload(); await ready(); assert.equal((await data()).workspaces.length,1);
     results.push('真实旧键迁移成功，重新打开不重复导入');
     await popup.getByRole('button',{name:'删除工作区：V0.1旧工作区',exact:true}).click(); await ready();
+    await popup.getByRole('button',{name:'确认删除工作区：V0.1旧工作区',exact:true}).click(); await ready();
     await popup.reload(); await ready(); assert.equal((await data()).workspaces.length,0);
     results.push('迁移记录删除后不再出现');
     assert.deepEqual(errors,[]);
-    fs.writeFileSync(path.join(output,'BWI-V0.2-native-test-results.json'),JSON.stringify({passed:results.length,browser:version.product,tests:results,environment:'Real unpacked extension in isolated temporary Chrome profile, real extension storage/tabs/windows APIs. Opened popup.html as an extension page; toolbar popup reload in the user profile remains manual.'},null,2));
+    fs.writeFileSync(path.join(output,'BWI-V0.2.1-native-test-results.json'),JSON.stringify({passed:results.length,browser:version.product,tests:results,environment:'Real unpacked extension in isolated temporary Chrome profile, real extension storage/tabs/windows APIs. Opened popup.html as an extension page; toolbar popup reload in the user profile remains manual.'},null,2));
     for (const result of results) console.log('PASS '+result);
     console.log(`ALL ${results.length} NATIVE CHECKS PASSED`);
   } finally {await context.close();}

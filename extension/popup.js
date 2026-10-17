@@ -81,7 +81,9 @@ async function readWorkspaces() {
 
 function setBusy(value) {
   busy = value;
-  nameInput.disabled = value;
+  for (const input of document.querySelectorAll("input")) {
+    input.disabled = value;
+  }
   for (const button of document.querySelectorAll("button")) {
     button.disabled = value;
   }
@@ -98,6 +100,15 @@ async function runAction(label, action) {
   } finally {
     setBusy(false);
   }
+}
+
+function formatSavedAt(value) {
+  const date = typeof value === "string" && value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "时间未知";
+  return date.toLocaleString("zh-CN", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false
+  });
 }
 
 function renderWorkspaces(workspaces) {
@@ -117,18 +128,82 @@ function renderWorkspaces(workspaces) {
     if (validCount !== workspace.tabs.length) {
       info.textContent += `（恢复时将跳过 ${workspace.tabs.length - validCount} 个无效地址）`;
     }
+    const savedTime = document.createElement("p");
+    savedTime.className = "saved-time";
+    savedTime.textContent = `保存于：${formatSavedAt(workspace.savedAt)}`;
     const actions = document.createElement("div");
     actions.className = "actions";
     const restore = document.createElement("button");
     restore.textContent = "恢复到新窗口";
     restore.setAttribute("aria-label", `恢复工作区：${workspace.name}`);
     restore.addEventListener("click", () => restoreWorkspace(workspace.id));
+    const rename = document.createElement("button");
+    rename.textContent = "重命名";
+    rename.setAttribute("aria-label", `重命名工作区：${workspace.name}`);
     const remove = document.createElement("button");
     remove.textContent = "删除";
     remove.className = "delete";
     remove.setAttribute("aria-label", `删除工作区：${workspace.name}`);
-    remove.addEventListener("click", () => deleteWorkspace(workspace.id));
-    actions.append(restore, remove);
+    actions.append(restore, rename, remove);
+
+    // 在弹窗内编辑和确认，避免浏览器对话框影响扩展弹窗的焦点。
+    const editForm = document.createElement("form");
+    editForm.className = "edit-form";
+    editForm.hidden = true;
+    const editInput = document.createElement("input");
+    editInput.type = "text";
+    editInput.maxLength = 40;
+    editInput.value = workspace.name;
+    editInput.setAttribute("aria-label", `新名称：${workspace.name}`);
+    const submitName = document.createElement("button");
+    submitName.type = "submit";
+    submitName.textContent = "保存名称";
+    const cancelName = document.createElement("button");
+    cancelName.type = "button";
+    cancelName.textContent = "取消重命名";
+    cancelName.addEventListener("click", () => {
+      editForm.hidden = true;
+      rename.focus();
+    });
+    editForm.addEventListener("submit", event => {
+      event.preventDefault();
+      renameWorkspace(workspace.id, editInput.value).then(() => {
+        if (editInput.isConnected) editInput.focus();
+      });
+    });
+    editForm.append(editInput, submitName, cancelName);
+
+    const confirmation = document.createElement("div");
+    confirmation.className = "confirmation";
+    confirmation.hidden = true;
+    confirmation.setAttribute("role", "group");
+    confirmation.setAttribute("aria-label", `删除确认：${workspace.name}`);
+    const question = document.createElement("p");
+    question.textContent = `确定删除「${workspace.name}」？此操作无法撤销。`;
+    const confirmDelete = document.createElement("button");
+    confirmDelete.textContent = "确认删除";
+    confirmDelete.className = "delete";
+    confirmDelete.setAttribute("aria-label", `确认删除工作区：${workspace.name}`);
+    confirmDelete.addEventListener("click", () => deleteWorkspace(workspace.id, workspace.name));
+    const cancelDelete = document.createElement("button");
+    cancelDelete.textContent = "取消删除";
+    cancelDelete.addEventListener("click", () => {
+      confirmation.hidden = true;
+      remove.focus();
+    });
+    confirmation.append(question, confirmDelete, cancelDelete);
+    rename.addEventListener("click", () => {
+      confirmation.hidden = true;
+      editInput.value = workspace.name;
+      editForm.hidden = false;
+      editInput.focus();
+      editInput.select();
+    });
+    remove.addEventListener("click", () => {
+      editForm.hidden = true;
+      confirmation.hidden = false;
+      cancelDelete.focus();
+    });
 
     const details = document.createElement("details");
     const summary = document.createElement("summary");
@@ -140,7 +215,7 @@ function renderWorkspaces(workspaces) {
       list.append(item);
     }
     details.append(summary, list);
-    card.append(heading, info, actions, details);
+    card.append(heading, info, savedTime, actions, editForm, confirmation, details);
     preview.append(card);
   }
 }
@@ -201,13 +276,45 @@ async function restoreWorkspace(id) {
   });
 }
 
-async function deleteWorkspace(id) {
+async function renameWorkspace(id, value) {
+  return runAction("重命名", async () => {
+    const name = value.trim();
+    if (!name || name.length > 40) {
+      throw new Error(!name ? "请输入工作区名称" : "名称最多40个字符");
+    }
+    const workspaces = await readWorkspaces();
+    const workspace = workspaces.find(item => item.id === id);
+    if (!workspace) {
+      renderWorkspaces(workspaces);
+      throw new Error("此工作区已被删除");
+    }
+    if (workspaces.some(item => item.id !== id && item.name === name)) {
+      throw new Error("已有同名工作区，请换一个名称");
+    }
+    if (workspace.name === name) {
+      showMessage("名称未改变");
+      renderWorkspaces(workspaces);
+      return;
+    }
+    // 只改名称，ID、网页顺序和原始保存时间保持不变。
+    const renamed = workspaces.map(item => item.id === id ? { ...item, name } : item);
+    await chrome.storage.local.set({ [KEY]: renamed });
+    renderWorkspaces(renamed);
+    showMessage(`已重命名为「${name}」`);
+  });
+}
+
+async function deleteWorkspace(id, confirmedName) {
   return runAction("删除", async () => {
     const workspaces = await readWorkspaces();
     const workspace = workspaces.find(item => item.id === id);
     if (!workspace) {
       renderWorkspaces(workspaces);
       throw new Error("此工作区已被删除");
+    }
+    if (workspace.name !== confirmedName) {
+      renderWorkspaces(workspaces);
+      throw new Error("工作区名称已变化，请重新确认删除");
     }
     const remaining = workspaces.filter(item => item.id !== id);
     await chrome.storage.local.set({ [KEY]: remaining });
