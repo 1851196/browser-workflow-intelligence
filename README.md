@@ -1,5 +1,7 @@
 # Browser Workflow Intelligence (BWI)
 
+A Chrome extension for saving and restoring named browser workspaces.
+
 **一个将浏览器标签页整理为多个命名工作区的 Chrome 扩展。**
 
 在“课程学习”“实习求职”等任务之间切换时，可以保存当前窗口的网页组合，随后按原顺序恢复到新窗口。每个工作区独立保存和删除，数据保存在本机。
